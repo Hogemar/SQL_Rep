@@ -296,3 +296,67 @@ CREATE PROCEDURE PrintPrice
 
 GO
 EXEC PrintPrice 3, '11:30:00', 'евро' 
+
+--1.2. Разработать хранимую процедуру, которая осуществляет 
+--вставку записей в таблицу Пациенты. Хранимая процедура 
+--должна обеспечить защиту данных от дублирования согласно 
+--следующему правилу: поликлинику могут посещать пациенты 
+--с одинаковыми фамилиями, но у них должны быть разные 
+--значения адреса.
+GO
+CREATE PROCEDURE AddPacient 
+	@num smallint,
+	@LastName varchar (40),
+	@Adress varchar (80),
+	@BitrhDay smallint
+	as
+	if not exists (Select 1 From Пациенты Where Фамилия =@LastName and  Адрес =@Adress)
+		begin
+			Insert into Пациенты (Номер,Фамилия,Адрес, [Год рождения])
+			Values (@num,@LastName,@Adress, @BitrhDay)
+			print 'Запись успешно добавлено'
+		end
+	else print 'Ошибка при добавлении'
+go
+
+exec AddPacient 11,'Петров','Солнечная, 9, 46',1990
+go
+
+--1.4 Разработать хранимую процедуру, которая изменяет стоимость 
+--всех приёмов у стоматолога для заданной пользователем 
+--услуги согласно скидкам, указанным в  таблице
+
+Create procedure ChangeCoast
+	@num smallint
+as 
+	DECLARE @count smallint
+	SET @count = 0
+
+	Select @count = count(ОказанныеУслуги.Пациент) 
+		From ОказанныеУслуги Join Пациенты on ОказанныеУслуги.Пациент = Пациенты.Номер
+		Where ОказанныеУслуги.Пациент= @num
+
+	if (@count =1)
+		begin
+			Update ОказанныеУслуги
+			Set Стоимость =Стоимость - Стоимость*0.2
+			Where ОказанныеУслуги.Пациент=@num
+		end
+
+	if(@count between 2 and 10)
+		begin
+			Update ОказанныеУслуги
+			Set Стоимость = Стоимость - Стоимость*0.3
+			Where ОказанныеУслуги.Пациент=@num
+		end
+
+	if (@count >10)
+		begin
+			Update ОказанныеУслуги
+			Set Стоимость = Стоимость - Стоимость*0.7
+			Where ОказанныеУслуги.Пациент=@num
+		end
+go 
+
+exec ChangeCoast 1
+go
