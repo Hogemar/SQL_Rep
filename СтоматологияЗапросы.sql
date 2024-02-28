@@ -210,3 +210,89 @@ WHERE Пациенты.Фамилия='Фролов'
 GO
 INSERT INTO V_Пациенты_до95
 VALUES (12,'Тихонов', 'Солнечная, 15, 34', 1996)
+
+
+--- ЗАДАЧИ на сдачу от 28.02.24 ---
+
+-- Создать представление, кот. выводит услуги, на которые не было посещений
+GO
+CREATE VIEW useless_услуги AS
+	SELECT Код, Название
+	FROM Услуги
+	WHERE Код NOT IN (SELECT Услуга FROM ОказанныеУслуги)
+
+GO
+
+-- Создать правило, что пациент старше 18 лет
+GO
+CREATE RULE R_older18
+	AS YEAR(GETDATE()) - @birthYear >=18
+GO
+
+EXEC sp_bindrule 'R_older18', 'Пациенты.[Год рождения]'
+
+
+--* Лаба по хранимым процедурам 28.02.24 *--
+
+/*1.1. Разработать хранимую процедуру, которая по заданному 
+номеру пациента возвращает его фамилию и адрес.*/
+
+GO
+CREATE PROCEDURE GetPacient @pacientNum smallint AS
+	SELECT Фамилия, Адрес
+	FROM Пациенты
+	WHERE Номер = @pacientNum
+
+EXEC GetPacient 2
+
+/*1.3. Разработать хранимую процедуру, которая по заданным 
+значениям номера пациента, названия услуги и времени 
+приема выводит значение стоимости в валюте, заданной 
+пользователем.*/
+DROP PROCEDURE PrintPrice
+GO
+CREATE PROCEDURE PrintPrice
+	@pacientNum smallint,
+	--@serviceName varchar(50),
+	@serviceTime time(7),
+	@currency varchar(15)		AS
+
+	IF(@currency NOT IN('рубль', 'евро', 'доллар'))
+		BEGIN
+			PRINT 'Неизвестная валюта!'
+			Return -4
+		END
+
+	DECLARE @pacientName varchar(40)
+	SELECT @pacientName = Фамилия FROM Пациенты WHERE Номер = @pacientNum
+	
+	IF(@pacientName IS NULL)
+		BEGIN
+			PRINT 'Неверный номер пациента!'
+			Return -1
+		END
+
+	DECLARE @servicePrice smallmoney--varchar(20)
+	SELECT @servicePrice = Стоимость FROM ОказанныеУслуги WHERE Пациент = @pacientNum AND Время = @serviceTime
+	
+	IF(@servicePrice IS NULL)
+		BEGIN
+			PRINT 'Не найдена запись на приём!'
+			Return -3
+		END
+
+	DECLARE @serviceName varchar(50)
+	SELECT @serviceName = Название FROM Услуги WHERE Код = (SELECT Услуга FROM ОказанныеУслуги WHERE Пациент = @pacientNum AND Время = @serviceTime)
+
+	PRINT 'Время приёма: ' + CONVERT(varchar(10), @serviceTime)
+	PRINT 'Пациент: ' + @pacientName + ', Услуга: ' + @serviceName
+
+	IF(@currency = 'евро')
+		PRINT 'Стоимость: ' + CONVERT(varchar(20), @servicePrice/100.0) + ' евро'
+	ELSE IF(@currency = 'доллар')
+		PRINT 'Стоимость: ' + CONVERT(varchar(20), @servicePrice/70.0) + ' долларов'
+	ELSE
+		PRINT 'Стоимость: ' + CONVERT(varchar(20), @servicePrice) + ' рублей'
+
+GO
+EXEC PrintPrice 3, '11:30:00', 'евро' 
